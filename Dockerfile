@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
+# Install additional packages
 RUN pip install --no-cache-dir \
     instaloader \
     youtube-transcript-api \
@@ -29,12 +30,15 @@ RUN pip install --no-cache-dir \
     langchain-google-genai \
     langchain-community
 
-# Copy files
+# Copy backend files
 COPY backend/ ./backend/
+
+# Copy frontend build artifacts
 COPY --from=frontend-builder /app/frontend/.next ./frontend/.next
 COPY --from=frontend-builder /app/frontend/public ./frontend/public
 COPY --from=frontend-builder /app/frontend/package*.json ./frontend/
 
+# Install frontend production dependencies
 WORKDIR /app/frontend
 RUN npm install --only=production --legacy-peer-deps
 RUN npm install -g concurrently
@@ -42,8 +46,8 @@ RUN npm install -g concurrently
 WORKDIR /app
 EXPOSE 10000
 
-# Improved startup with delay to ensure backend starts first
-CMD ["sh", "-c", "sleep 8 && concurrently \
+# Start both services with delay to ensure backend starts first
+CMD ["sh", "-c", "sleep 10 && concurrently \
   \"PYTHONPATH=/app:/app/backend uvicorn backend.main:app --host 0.0.0.0 --port 8001\" \
   \"npm run start --prefix /app/frontend -- -p 10000\" \
   --names backend,frontend \
