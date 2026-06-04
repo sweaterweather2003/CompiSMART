@@ -1,0 +1,13 @@
+{
+  "name": "compismart-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install-all": "pip install -r backend/requirements.txt --break-system-packages && npm install --prefix frontend --legacy-peer-deps",
+    "build": "npm run build --prefix frontend",
+    "start": "npx concurrently \"PYTHONPATH=. python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001\" \"npm run start --prefix frontend\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
