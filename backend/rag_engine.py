@@ -4,20 +4,25 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough, RunnableBranch
-from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 
 backend_dir = Path(__file__).resolve().parent
 load_dotenv(dotenv_path=backend_dir / ".env")
 
 if not os.getenv("GOOGLE_API_KEY"):
-    raise ValueError(f"CRITICAL ERROR: GOOGLE_API_KEY is missing from your .env file!")
+    raise ValueError("CRITICAL ERROR: GOOGLE_API_KEY is missing from your .env file!")
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
-embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004")
-vector_store = Chroma(embedding_function=embeddings, persist_directory=str(backend_dir / "chroma_db_gemini"))
+# Updated to working models
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
+embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2")   # ← Fixed here
+
+vector_store = Chroma(
+    embedding_function=embeddings, 
+    persist_directory=str(backend_dir / "chroma_db_gemini")
+)
 
 def process_and_store_videos(video_a_data: dict, video_b_data: dict) -> bool:
     docs = []
@@ -68,9 +73,6 @@ def process_and_store_videos(video_a_data: dict, video_b_data: dict) -> bool:
     vector_store.add_documents(chunks)
     return True
 
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
 def get_rag_chain():
     retriever = vector_store.as_retriever(search_kwargs={"k": 4})
     
@@ -86,14 +88,8 @@ def get_rag_chain():
         MessagesPlaceholder("chat_history"),
         ("human", "{input}"),
     ])
-    
-    contextualize_chain = contextualize_q_prompt | llm | StrOutputParser()
-    
-    query_generator = RunnableBranch(
-        (lambda x: len(x.get("chat_history", [])) > 0, contextualize_chain),
-        (lambda x: x["input"])
-    )
-    
+    history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+
     system_prompt = (
         "You are an expert social media analyst. Use the following pieces of retrieved context to answer "
         "the question. Compare Video A and Video B based on metadata, engagement, and transcripts.\n"
@@ -108,12 +104,7 @@ def get_rag_chain():
         ("human", "{input}"),
     ])
     
-    rag_chain = (
-        RunnablePassthrough.assign(
-            context=lambda x: (query_generator | retriever | format_docs)(x)
-        )
-        | qa_prompt
-        | llm
-    )
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
     
     return rag_chain
