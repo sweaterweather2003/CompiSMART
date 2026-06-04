@@ -125,18 +125,30 @@ export default function Home() {
 
     setIsProcessing(true);
     try {
+      console.log("🚀 Sending request to /api/process-videos with URLs:", { ytUrl, igUrl });
+
       const res = await fetch("/api/process-videos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ youtube_url: ytUrl, instagram_url: igUrl }),
       });
+
       const data = await res.json();
+
+      if (!res.ok) {
+        console.error("❌ API Error Response:", data);
+        throw new Error(data.error || data.message || "Failed to process videos");
+      }
+
+      console.log("✅ Videos processed successfully:", data);
       setVideoData(data.data);
-    } catch (error) {
+
+    } catch (error: any) {
       console.error("Pipeline failure executing ingestion protocol:", error);
-      alert("Failed to process target video vectors. Ensure ingestion endpoint is online.");
+      alert("Failed to process target video vectors: " + (error.message || "Check browser console for details"));
+    } finally {
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
   };
 
   return (
