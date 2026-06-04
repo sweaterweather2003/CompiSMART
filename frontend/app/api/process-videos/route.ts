@@ -5,12 +5,11 @@ export async function POST(req: NextRequest) {
     const { youtube_url, instagram_url } = await req.json();
 
     if (!youtube_url || !instagram_url) {
-      return NextResponse.json({ error: "Both YouTube and Instagram URLs are required" }, { status: 400 });
+      return NextResponse.json({ error: "Both URLs are required" }, { status: 400 });
     }
 
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
-
-    const response = await fetch(`${BACKEND_URL}/api/process-videos`, {
+    // Try internal connection (Render same-container)
+    const response = await fetch('http://127.0.0.1:8001/api/process-videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ youtube_url, instagram_url }),
@@ -19,16 +18,14 @@ export async function POST(req: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
-      return NextResponse.json({ 
-        error: data.detail || data.error || "Processing failed" 
-      }, { status: response.status });
+      return NextResponse.json({ error: data.detail || data.error || "Processing failed" }, { status: response.status });
     }
 
     return NextResponse.json(data);
   } catch (error: any) {
     console.error("Process videos error:", error);
     return NextResponse.json({ 
-      error: "Failed to connect to backend service" 
+      error: "Backend connection failed. Please refresh and try again." 
     }, { status: 500 });
   }
 }
