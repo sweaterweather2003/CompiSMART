@@ -1,27 +1,29 @@
-import { StreamingTextResponse } from 'ai';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
-  const { messages } = await req.json();
+export async function POST(req: NextRequest) {
+  try {
+    const { input, chat_history } = await req.json();
 
-  const latestMessage = messages[messages.length - 1].content;
-  const chatHistory = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
-    role: m.role,
-    content: m.content,
-  }));
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
 
-  // Fallback to localhost dynamically if the live environment variable isn't configured
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8001';
+    const response = await fetch(`${BACKEND_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input,
+        chat_history: chat_history || [],
+      }),
+    });
 
-  const response = await fetch(`${BACKEND_URL}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      question: latestMessage,
-      chat_history: chatHistory,
-    }),
-  });
+    if (!response.ok) {
+      const errorData = await response.json();
+      return NextResponse.json({ error: errorData.detail || "Chat failed" }, { status: response.status });
+    }
 
-  if (!response.body) throw new Error("No response body");
-  
-  return new StreamingTextResponse(response.body);
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error("Chat error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
